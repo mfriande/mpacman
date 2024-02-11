@@ -18,7 +18,8 @@ enum Direction {
     UP,
     DOWN,
     LEFT,
-    RIGHT
+    RIGHT,
+    NONE
 };
 
 enum Ghost_Type {
@@ -31,7 +32,8 @@ enum Ghost_Type {
 enum Ghost_Mode {
     FRIGHTENED, 
     SCATTER,
-    CHASE
+    CHASE,
+    EATEN
 };
 
 enum Speed {
@@ -49,7 +51,6 @@ enum Tile_Type {
     ENERGYZER_PELLET,   // *
     TUNNEL,             // T
     GATE,               // G
-    TUNNEL_END          // W
 };
 
 struct Tile_Coordinates {
@@ -76,6 +77,7 @@ struct Tile {
 
 // Example structure for Pacman
 struct Pacman {
+    enum Direction direction; // Pacman current direction
     enum Speed speed;
     int lives; // Number of lives
     int score; // Player's score
@@ -86,7 +88,8 @@ struct Pacman {
 
 // Example structure for Ghost
 struct Ghost {
-    int speed;
+    enum Direction direction; // Ghost current direction
+    enum Speed speed;
     struct Tile_Coordinates target;     // target position
     struct Tile_Coordinates current;    // current position
     struct Tile_Coordinates next;       // next position
@@ -281,42 +284,13 @@ void update_pacman_speed(enum Speed speed) {
     }
 }
 
-void check_tunnel_collision(struct Pacman* pacman) {
-    // Check if Pacman's current position is within the left tunnel
-    if((pacman->current.x == tunnel.left_entrance.x && 
-        pacman->current.y >= tunnel.left_exit.y &&
-        pacman->current.y <= tunnel.left_entrance.y)){
-        // Check if Pacman is at exit of the left tunnel
-        if(pacman->next.y == tunnel.left_exit.y) {
-            // Set Pacman's next position to the entrance of the right
-            pacman->next.y = tunnel.right_exit.y;
-        }    
-        pacman->speed = VERY_FAST;
-    
-    } 
-    // Check if Pacman's current position is within the right tunnel
-    else if((pacman->current.x == tunnel.right_entrance.x &&
-            pacman->current.y <= tunnel.right_exit.y &&
-            pacman->current.y >= tunnel.right_entrance.y)) {
-            // Check if Pacman is at exit of the right tunnel
-            if(pacman->next.y == tunnel.right_exit.y) {
-                // Set Pacman's next position to the entrance of the left
-                pacman->next.y = tunnel.left_exit.y;
-            }
-            pacman->speed = VERY_FAST;  
-    } else {
-        pacman->speed = NORMAL;
-    }
-    update_pacman_speed(pacman->speed);
-}
-
-void check_wall_collision(struct Board_Element board[ROWS][COLS], struct Pacman* pacman) {
+void check_wall_or_gate_collision(struct Board_Element board[ROWS][COLS], struct Pacman* pacman) {
     // get Pacman's next position
     int next_x = pacman->next.x;
     int next_y = pacman->next.y;
 
     // Check if Pacman's next position collides with a wall
-    if(board[next_x][next_y].element == '#') {
+    if(board[next_x][next_y].element == '#' || board[next_x][next_y].element == 'G') {
         // Pacman collided with a wall, reset his next position to his current position
         pacman->next.x = pacman->current.x;
         pacman->next.y = pacman->current.y;
@@ -343,21 +317,50 @@ void check_pellet_collision(struct Board_Element board[ROWS][COLS], struct Pacma
         pellets[board[next_x][next_y].index_to_pellet_array].eaten = 1;
     }
 }
-//void check_collisions(char board[ROWS][COLS], struct Pacman* pacman, struct Ghost ghosts[NUM_GHOSTS], struct Pellet pellets[NUM_PELLETS]) {
-void check_collisions(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, struct Pellet pellets[NUM_PELLETS + NUM_ENERGIZER_PELLETS]) {
-    // Implement collision logic based on your game design
-    // For example, check if Pacman collides with pellets, ghosts or walls
-    // Update the game state accordingly
-    check_wall_collision(board, pacman);
-    check_pellet_collision(board, pacman, pellets);
-    check_tunnel_collision(pacman);
+
+int check_tunnel_collision(struct Pacman* pacman) {
+    int collision = 0;
+    // Check if Pacman's current position is within the left tunnel
+    if((pacman->current.x == tunnel.left_entrance.x && 
+        pacman->current.y >= tunnel.left_exit.y &&
+        pacman->current.y <= tunnel.left_entrance.y)){
+        // Check if Pacman is at exit of the left tunnel
+        if(pacman->next.y == tunnel.left_exit.y) {
+            // Set Pacman's next position to the exit of the right tunnel
+            pacman->next.x = tunnel.right_exit.x;
+            pacman->next.y = tunnel.right_exit.y;
+           
+            pacman->direction = LEFT;
+            collision = 1;
+        }    
+        pacman->speed = FAST;
+    
+    } else if ((pacman->current.x == tunnel.right_entrance.x &&
+            pacman->current.y <= tunnel.right_exit.y &&
+            pacman->current.y >= tunnel.right_entrance.y)) {
+            // Check if Pacman is at exit of the right tunnel
+            if(pacman->next.y == tunnel.right_exit.y) {
+                // Set Pacman's next position to the exit of the left tunnel
+                pacman->next.x = tunnel.left_exit.x;
+                pacman->next.y = tunnel.left_exit.y;
+            
+                pacman->direction = RIGHT;
+                collision = 1;
+            }
+            
+            pacman->speed = FAST;
+
+    } else {
+        pacman->speed = NORMAL;
+    }
+    return collision;
 }
 
-void move_pacman(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, enum Direction direction, struct Pellet pellets[NUM_PELLETS + NUM_ENERGIZER_PELLETS]) {
+void move_pacman(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, struct Pellet pellets[NUM_PELLETS + NUM_ENERGIZER_PELLETS]) {
     pacman->next.x = pacman->current.x;
     pacman->next.y = pacman->current.y;
     update_pacman_speed(pacman->speed);
-    switch (direction) {
+    switch (pacman->direction) {
         case UP: // Move up
             pacman->next.x--;
             break;
@@ -370,17 +373,49 @@ void move_pacman(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, 
         case RIGHT: // Move right
             pacman->next.y++;
             break;
+        default:
+            break;
         // Add more cases for other keys if needed
     }
     if(is_valid_move(pacman->next)) {
-        check_collisions(board, pacman, pellets);
-        // Clear the current position on the board
-        board[pacman->current.x][pacman->current.y].element = ' ';
-        // Update Pacman's current position
-        pacman->current.x = pacman->next.x;
-        pacman->current.y = pacman->next.y;
-        // Place Pacman in the new position on the board
-        board[pacman->next.x][pacman->next.y].element = 'O';
+        check_wall_or_gate_collision(board, pacman);
+        check_pellet_collision(board, pacman, pellets);
+        if(!check_tunnel_collision(pacman)) { // if not collision update pacman normally
+            // Clear the current position on the board
+            board[pacman->current.x][pacman->current.y].element = ' ';
+            // Update Pacman's current position
+            pacman->current.x = pacman->next.x;
+            pacman->current.y = pacman->next.y;
+            // Place Pacman in the new position on the board
+            board[pacman->next.x][pacman->next.y].element = 'O';
+        } else { // if collision update pacman differently 
+            // Clear the current position on the board
+            board[pacman->current.x][pacman->current.y].element = ' ';
+            // Place pacman at tunnel exit
+            if(pacman->direction == LEFT) {
+                board[pacman->current.x][pacman->current.y - 1].element = 'O';
+            } else {
+                board[pacman->current.x][pacman->current.y + 1].element = 'O';
+            }
+            // to make pacman traverse from left end tile of the tunnel to the right end on opposite side cleaner
+            print_board(board);
+            refresh();
+            usleep(200000);
+            if(pacman->direction == LEFT) {
+                board[pacman->current.x][pacman->current.y - 1].element = ' ';
+            } else {
+                board[pacman->current.x][pacman->current.y + 1].element = ' ';
+            }
+            
+            // Update Pacman's current position
+            pacman->current.x = pacman->next.x;
+            pacman->current.y = pacman->next.y;
+            // Place Pacman in the new position on the board
+            board[pacman->next.x][pacman->next.y].element = 'O';
+            print_board(board);
+            refresh();
+        }
+        
     }
 }
 
@@ -462,9 +497,9 @@ void update_ghost_behavior(struct Ghost *ghost, struct Pacman *pacman, char boar
 }
 */
 
-void update_game_state(struct Board_Element board[ROWS][COLS], enum Direction current, struct Pacman* pacman, struct Ghost ghosts[NUM_GHOSTS], struct Pellet pellets[NUM_PELLETS]) {
+void update_game_state(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, struct Ghost ghosts[NUM_GHOSTS], struct Pellet pellets[NUM_PELLETS]) {
     
-    move_pacman(board, pacman, current, pellets);
+    move_pacman(board, pacman, pellets);
     // Update ghost behavior for each ghost
     for(int i = 0; i < NUM_GHOSTS; i++) {
         // Implement the update_ghost_behavior function according to your logic
@@ -505,9 +540,12 @@ int main() {
     // Add more initialization code for Pacman, ghosts and pellets if needed
     pacman.current.x = 26;
     pacman.current.y = 13;
+    //pacman.current.x = 17;
+    //pacman.current.y = 6;
     pacman.lives = 3;
     pacman.score = 0;
     pacman.speed = NORMAL;
+    pacman.direction = NONE;
 
     ghosts[0].current.x = 14;
     ghosts[0].current.y = 13;
@@ -520,18 +558,15 @@ int main() {
     ghosts[1].type = PINKY;
     ghosts[1].mode = CHASE;
     ghosts[1].speed = NORMAL;
-
-    // Initialize Pacman's direction
-    enum Direction current_direction = RIGHT;
     
     // Game loop
     while(!is_game_over(&pacman)){
         char input = get_input();
 
         // Handle user input and update Pacman's direction
-        current_direction = handle_input(input, current_direction);
+        pacman.direction = handle_input(input, pacman.direction);
 
-        update_game_state(game_board, current_direction, &pacman, ghosts, pellets);
+        update_game_state(game_board, &pacman, ghosts, pellets);
         print_board(game_board);
         print_score(pacman.score);
     }
