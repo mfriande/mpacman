@@ -153,6 +153,7 @@ void print_board(struct Board_Element board[ROWS][COLS]) {
             switch(board[i][j].element) {
                 case 'V':
                 case 'T':
+                case '!':
                     printw("  ");
                     break;
                 default:
@@ -184,7 +185,24 @@ void print_board_to_file(struct Board_Element board[ROWS][COLS], const char* fil
 }
 
 void print_score(int score) {
-    mvprintw(1, 5, "SCORE: %d", score);
+    mvprintw(1, 2, "SCORE: %d", score);
+}
+
+void print_lives(int lives) {
+    mvprintw(35, 2, "LIVES: %d", lives);
+}
+
+void print_fruit(char fruit) {
+    mvprintw(35, 45, "FRUIT: %c", fruit);
+}
+
+void print_ready_banner() {
+    mvprintw(20, 22, "R E A D Y !");
+}
+
+void hide_cursor() {
+    curs_set(0);
+    noecho();
 }
 
 // Function to build an array of pellets from the 2D game board
@@ -397,10 +415,14 @@ void move_pacman(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, 
             } else {
                 board[pacman->current.x][pacman->current.y + 1].element = 'O';
             }
-            // to make pacman traverse from left end tile of the tunnel to the right end on opposite side cleaner
+            // to make pacman traverse from left end tile of the tunnel to the right end on opposite side or vice versa cleaner
             print_board(board);
+            print_score(pacman->score);
+            print_lives(pacman->lives);
+            print_fruit('M');
             refresh();
             usleep(200000);
+            // Clear Pacman's current position
             if(pacman->direction == LEFT) {
                 board[pacman->current.x][pacman->current.y - 1].element = ' ';
             } else {
@@ -521,6 +543,8 @@ int is_game_over(struct Pacman* pacman) {
 int main() {
     // Initialize ncurses
     initscr();
+    // Hide the cursor
+    hide_cursor();
     keypad(stdscr, TRUE);   // Enable special keys
     timeout(100);           // Set a timeout for getch
 
@@ -530,7 +554,7 @@ int main() {
     struct Ghost ghosts[NUM_GHOSTS];
     struct Pellet pellets[NUM_PELLETS + NUM_ENERGIZER_PELLETS];
     // Initialize game board from a file
-    initialize_board_from_file(game_board, "maze2.txt");
+    initialize_board_from_file(game_board, "maze.txt");
     // Build the Pellet array based on game board
     int total_of_pellets = build_pellet_array(game_board, pellets);
     printf("NUM OF PELLETS : %d", total_of_pellets);
@@ -540,8 +564,6 @@ int main() {
     // Add more initialization code for Pacman, ghosts and pellets if needed
     pacman.current.x = 26;
     pacman.current.y = 13;
-    //pacman.current.x = 17;
-    //pacman.current.y = 6;
     pacman.lives = 3;
     pacman.score = 0;
     pacman.speed = NORMAL;
@@ -562,13 +584,17 @@ int main() {
     // Game loop
     while(!is_game_over(&pacman)){
         char input = get_input();
-
         // Handle user input and update Pacman's direction
         pacman.direction = handle_input(input, pacman.direction);
 
         update_game_state(game_board, &pacman, ghosts, pellets);
         print_board(game_board);
+        if(pacman.direction == NONE) {
+            print_ready_banner();
+        }
         print_score(pacman.score);
+        print_lives(pacman.lives);
+        print_fruit('M'); // print strawberry or banana (todo)
     }
 
     // Display game over message and final score
