@@ -115,6 +115,9 @@ struct Board_Element {
     int index_to_pellet_array;
 };
 
+// To track in which level Pacman is playing
+    int level = 1;
+
 // ###### End of 3rd step
 
 // ###### 2nd step - Designing the Game Board
@@ -196,6 +199,10 @@ void print_fruit(char fruit) {
     mvprintw(35, 45, "FRUIT: %c", fruit);
 }
 
+void print_current_level(int level) {
+    mvprintw(1, 45, "LEVEL: %d", level);
+}
+
 void print_ready_banner() {
     mvprintw(20, 22, "R E A D Y !");
 }
@@ -203,6 +210,19 @@ void print_ready_banner() {
 void hide_cursor() {
     curs_set(0);
     noecho();
+}
+
+int check_next_level(struct Board_Element board[ROWS][COLS], const char* filename, 
+                        int total_pellets, struct Pacman* pacman, int pellets_eaten) {
+    int next_level = 0;
+    if(pellets_eaten == total_pellets) {
+        initialize_board_from_file(board, filename);
+        pacman->current.x = 26;
+        pacman->current.y = 13;
+        pacman->direction = NONE;
+        next_level = 1;
+    }
+    return next_level;
 }
 
 // Function to build an array of pellets from the 2D game board
@@ -315,7 +335,8 @@ void check_wall_or_gate_collision(struct Board_Element board[ROWS][COLS], struct
     }
 }
 
-void check_pellet_collision(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, struct Pellet pellets[NUM_PELLETS + NUM_ENERGIZER_PELLETS]) {
+void check_pellet_collision(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, 
+                            struct Pellet pellets[NUM_PELLETS + NUM_ENERGIZER_PELLETS], int* pellets_eaten) {
     // Get Pacman's next position
     int next_x = pacman->next.x;
     int next_y = pacman->next.y;
@@ -331,8 +352,9 @@ void check_pellet_collision(struct Board_Element board[ROWS][COLS], struct Pacma
             // Regular pellet
             pacman->score += 10; // Increase Pacman's score
         }
-        // Mark the pellet as eaten in pellet's array
+        // Mark the pellet as eaten in pellet's array (not used at the moment but can be helpfull in future)
         pellets[board[next_x][next_y].index_to_pellet_array].eaten = 1;
+        (*pellets_eaten)++;
     }
 }
 
@@ -374,7 +396,8 @@ int check_tunnel_collision(struct Pacman* pacman) {
     return collision;
 }
 
-void move_pacman(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, struct Pellet pellets[NUM_PELLETS + NUM_ENERGIZER_PELLETS]) {
+void move_pacman(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, 
+                    struct Pellet pellets[NUM_PELLETS + NUM_ENERGIZER_PELLETS], int* pellets_eaten) {
     pacman->next.x = pacman->current.x;
     pacman->next.y = pacman->current.y;
     update_pacman_speed(pacman->speed);
@@ -397,7 +420,7 @@ void move_pacman(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, 
     }
     if(is_valid_move(pacman->next)) {
         check_wall_or_gate_collision(board, pacman);
-        check_pellet_collision(board, pacman, pellets);
+        check_pellet_collision(board, pacman, pellets, pellets_eaten);
         if(!check_tunnel_collision(pacman)) { // if not collision update pacman normally
             // Clear the current position on the board
             board[pacman->current.x][pacman->current.y].element = ' ';
@@ -419,6 +442,7 @@ void move_pacman(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, 
             print_board(board);
             print_score(pacman->score);
             print_lives(pacman->lives);
+            print_current_level(level);
             print_fruit('M');
             refresh();
             usleep(200000);
@@ -519,9 +543,10 @@ void update_ghost_behavior(struct Ghost *ghost, struct Pacman *pacman, char boar
 }
 */
 
-void update_game_state(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, struct Ghost ghosts[NUM_GHOSTS], struct Pellet pellets[NUM_PELLETS]) {
+void update_game_state(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, struct Ghost ghosts[NUM_GHOSTS], 
+                        struct Pellet pellets[NUM_PELLETS], int* pellets_eaten) {
     
-    move_pacman(board, pacman, pellets);
+    move_pacman(board, pacman, pellets, pellets_eaten);
     // Update ghost behavior for each ghost
     for(int i = 0; i < NUM_GHOSTS; i++) {
         // Implement the update_ghost_behavior function according to your logic
@@ -557,7 +582,8 @@ int main() {
     initialize_board_from_file(game_board, "maze.txt");
     // Build the Pellet array based on game board
     int total_of_pellets = build_pellet_array(game_board, pellets);
-    printf("NUM OF PELLETS : %d", total_of_pellets);
+    // To Track how many pellets were eaten at the moment in current level
+    int pellets_eaten = 0;
     // Display the initial game board
     print_board(game_board);
 
@@ -587,14 +613,20 @@ int main() {
         // Handle user input and update Pacman's direction
         pacman.direction = handle_input(input, pacman.direction);
 
-        update_game_state(game_board, &pacman, ghosts, pellets);
+        update_game_state(game_board, &pacman, ghosts, pellets, &pellets_eaten);
         print_board(game_board);
         if(pacman.direction == NONE) {
             print_ready_banner();
         }
         print_score(pacman.score);
         print_lives(pacman.lives);
+        print_current_level(level);
         print_fruit('M'); // print strawberry or banana (todo)
+        if(check_next_level(game_board, "maze.txt", total_of_pellets, &pacman, pellets_eaten)) {
+            pellets_eaten = 0;
+            level++;
+        };
+        mvprintw(36, 28, "%d", pellets_eaten);
     }
 
     // Display game over message and final score
