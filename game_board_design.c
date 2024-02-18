@@ -263,30 +263,38 @@ int build_pellet_array(struct Board_Element board[ROWS][COLS], struct Pellet pel
 // ###### 4th step - Handle user input and move pacman
 
 // Function to handle user input and update Pacman's direction
-enum Direction handle_input(char input, enum Direction current) {
+enum Direction handle_input(char input, enum Direction current, struct Board_Element board[ROWS][COLS], struct Pacman* pacman) {
     switch (input) {
         case 'w':
-            return UP;
+            if(board[pacman->current.x - 1][pacman->current.y].element != '#') {
+                return UP;
+            }
+            break;
         case 's':
-            return DOWN;
+            if(board[pacman->current.x + 1][pacman->current.y].element != '#') {
+                return DOWN;
+            }
+            break;
         case 'a':
-            return LEFT;
+            if(board[pacman->current.x][pacman->current.y - 1].element != '#') {
+                return LEFT;
+            }
+            break;
         case 'd':
-            return RIGHT;
+            if(board[pacman->current.x][pacman->current.y + 1].element != '#') {
+                return RIGHT;
+            }
+            break;
         // add more cases for other keys if needed
         default:
-            return current; // no change in direction if an invalid key is pressed
+            break; // no change in direction if an invalid key is pressed
     }
+    return current;
 }
 
 char get_input() {
     return getch();
 }
-/*
-int is_valid_move(char board[ROWS][COLS], int x, int y) {
-    return (x >= 0 && x < ROWS && y >= 0 && y < COLS && board[x][y] != '#');
-}
-*/
 
 int is_valid_move(struct Tile_Coordinates target) {
     return (target.x >= 0 && target.x < ROWS && target.y >= 0 && target.y < COLS);
@@ -330,8 +338,8 @@ void check_wall_or_gate_collision(struct Board_Element board[ROWS][COLS], struct
     // Check if Pacman's next position collides with a wall
     if(board[next_x][next_y].element == '#' || board[next_x][next_y].element == 'G') {
         // Pacman collided with a wall, reset his next position to his current position
-        pacman->next.x = pacman->current.x;
-        pacman->next.y = pacman->current.y;
+            pacman->next.x = pacman->current.x;
+            pacman->next.y = pacman->current.y;
     }
 }
 
@@ -611,7 +619,7 @@ int main() {
     while(!is_game_over(&pacman)){
         char input = get_input();
         // Handle user input and update Pacman's direction
-        pacman.direction = handle_input(input, pacman.direction);
+        pacman.direction = handle_input(input, pacman.direction, game_board, &pacman);
 
         update_game_state(game_board, &pacman, ghosts, pellets, &pellets_eaten);
         print_board(game_board);
@@ -626,7 +634,8 @@ int main() {
             pellets_eaten = 0;
             level++;
         };
-        mvprintw(36, 28, "%d", pellets_eaten);
+        //mvprintw(36, 28, "%d", pellets_eaten);
+        //mvprintw(36, 33, "%d", pacman.direction);
     }
 
     // Display game over message and final score
