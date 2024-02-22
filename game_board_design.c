@@ -53,6 +53,13 @@ enum Tile_Type {
     GATE,               // G
 };
 
+enum Bonus_Type {
+    FRUIT,
+    KEY,
+    BELL,
+    GALAXIAN,
+};
+
 struct Tile_Coordinates {
     int x, y;
 };
@@ -77,10 +84,10 @@ struct Tile {
 
 // Example structure for Pacman
 struct Pacman {
-    enum Direction direction; // Pacman current direction
+    enum Direction direction;           // Pacman current direction
     enum Speed speed;
-    int lives; // Number of lives
-    int score; // Player's score
+    int lives;                          // Number of lives
+    int score;                          // Player's score
     struct Tile_Coordinates current;    // current position
     struct Tile_Coordinates next;       // next position 
 };
@@ -88,7 +95,7 @@ struct Pacman {
 
 // Example structure for Ghost
 struct Ghost {
-    enum Direction direction; // Ghost current direction
+    enum Direction direction;           // Ghost current direction
     enum Speed speed;
     struct Tile_Coordinates target;     // target position
     struct Tile_Coordinates current;    // current position
@@ -103,6 +110,15 @@ struct Pellet {
     struct Tile_Coordinates position;   // pellet position on board
     int is_energyzer;                   // tracks if current pellet is an energizer one
     int eaten;                          // flag indicates if the pellet was already ate by pacman
+};
+
+// Example structure for Fruit and Other Bonus Items
+struct Bonus_Item {
+    struct Tile_Coordinates position;
+    enum Bonus_Type type;
+    char symbol;
+    int points;
+    int eaten;
 };
 
 struct Maze {
@@ -473,6 +489,49 @@ void move_pacman(struct Board_Element board[ROWS][COLS], struct Pacman* pacman,
     }
 }
 
+struct Bonus_Item get_bonus_item(int level) {
+    struct Bonus_Item bonus = {.position = {20, 13}, .eaten = 0};
+    switch(level) {
+        case 1:
+            bonus = (struct Bonus_Item){.type = FRUIT, .symbol = 'F', .points = 100};
+            break;
+        case 2:
+            return bonus = (struct Bonus_Item){.type = FRUIT, .symbol = 'F', .points = 300};
+            break;
+        case 3:
+            bonus = (struct Bonus_Item){.type = FRUIT, .symbol = 'F', .points = 500};
+            break;
+        case 4:
+            bonus = (struct Bonus_Item){.type = FRUIT, .symbol = 'F', .points = 700};
+            break;
+        case 5:
+            bonus = (struct Bonus_Item){.type = FRUIT, .symbol = 'F', .points = 1000,};
+            break;
+        case 6:
+            bonus = (struct Bonus_Item){.type = GALAXIAN, .symbol = 'W', .points = 2000};
+            break;
+        case 7:
+            bonus = (struct Bonus_Item){.type = BELL, .symbol = 'A', .points = 3000};
+            break;
+        case 8:
+            bonus = (struct Bonus_Item){.type = KEY, .symbol = 'K', .points = 5000};
+            break;
+        default:
+            bonus = (struct Bonus_Item){.type = KEY, .symbol = 'K', .points = 5000};
+            break;
+    }
+    return bonus;
+}
+
+// Function to check if fruit should be displayed
+int should_display_fruit(int pellets_eaten, struct Board_Element board[ROWS][COLS]) {
+    struct Bonus_Item bonus = {.position = {20, 13}, .symbol = 'F'};
+    board[bonus.position.x][bonus.position.y].element = bonus.symbol;
+    if(pellets_eaten == 70) {
+        printw("%c ", board[20][26].element);
+    }
+}
+
 void chase_behavior(enum Ghost_Type type) {
     // Implement chase behavior based on ghost type
     switch (type) {
@@ -552,9 +611,14 @@ void update_ghost_behavior(struct Ghost *ghost, struct Pacman *pacman, char boar
 */
 
 void update_game_state(struct Board_Element board[ROWS][COLS], struct Pacman* pacman, struct Ghost ghosts[NUM_GHOSTS], 
-                        struct Pellet pellets[NUM_PELLETS], int* pellets_eaten) {
+                        struct Pellet pellets[NUM_PELLETS], int total_of_pellets, int* pellets_eaten) {
     
     move_pacman(board, pacman, pellets, pellets_eaten);
+    if(check_next_level(board, "maze.txt", total_of_pellets, pacman, *pellets_eaten)) {
+            *pellets_eaten = 0;
+            level++;
+        };
+    should_display_fruit(*pellets_eaten, board);
     // Update ghost behavior for each ghost
     for(int i = 0; i < NUM_GHOSTS; i++) {
         // Implement the update_ghost_behavior function according to your logic
@@ -621,7 +685,7 @@ int main() {
         // Handle user input and update Pacman's direction
         pacman.direction = handle_input(input, pacman.direction, game_board, &pacman);
 
-        update_game_state(game_board, &pacman, ghosts, pellets, &pellets_eaten);
+        update_game_state(game_board, &pacman, ghosts, pellets, total_of_pellets, &pellets_eaten);
         print_board(game_board);
         if(pacman.direction == NONE) {
             print_ready_banner();
@@ -630,10 +694,6 @@ int main() {
         print_lives(pacman.lives);
         print_current_level(level);
         print_fruit('M'); // print strawberry or banana (todo)
-        if(check_next_level(game_board, "maze.txt", total_of_pellets, &pacman, pellets_eaten)) {
-            pellets_eaten = 0;
-            level++;
-        };
         //mvprintw(36, 28, "%d", pellets_eaten);
         //mvprintw(36, 33, "%d", pacman.direction);
     }
